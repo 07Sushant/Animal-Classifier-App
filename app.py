@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_from_directory
+import streamlit as st
 import cv2
 import numpy as np
 from tensorflow.keras.models import Sequential
@@ -17,42 +17,28 @@ model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['ac
 model.load_weights('static/model.h5')
 
 COUNT = 0
-app = Flask(__name__)
-app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 1
 
-@app.route('/')
-def man():
-    return render_template('index.html')
+def main():
+    st.title('Image Classifier')
 
-@app.route('/home', methods=['POST'])
-def home():
-    global COUNT
-    try:
-        img = request.files['image']
-        img.save('static/{}.jpg'.format(COUNT))
+    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
 
-        img_arr = cv2.imread('static/{}.jpg'.format(COUNT))
-        img_arr = cv2.resize(img_arr, (128, 128))
-        img_arr = img_arr / 255.0
-        img_arr = img_arr.reshape(1, 128, 128, 3)
-        
-        prediction = model.predict(img_arr)
+    if uploaded_file is not None:
+        global COUNT
+        COUNT += 1
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        img = cv2.imdecode(file_bytes, 1)
+        img = cv2.resize(img, (128, 128))
+        img = img / 255.0
+        img = np.expand_dims(img, axis=0)
+
+        prediction = model.predict(img)
         x, y = round(prediction[0, 0], 2), round(prediction[0, 1], 2)
         preds = {'Class 1': x, 'Class 2': y}
 
-        COUNT += 1
-        return render_template('prediction.html', data=preds)
-    except Exception as e:
-        error_message = f"Error: {str(e)}"
-        return render_template('error.html', error=error_message)
-
-@app.route('/load_img')
-def load_img():
-    global COUNT
-    try:
-        return send_from_directory('static', "{}.jpg".format(COUNT - 1))
-    except FileNotFoundError:
-        return render_template('error.html', error="Image not found")
+        st.image(img, caption='Uploaded Image', use_column_width=True)
+        st.write("Prediction:")
+        st.write(preds)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    main()
